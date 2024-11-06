@@ -22,6 +22,7 @@ pytest
 pyink
 pre-commit
 pytype
+ray-tpu
 sentencepiece==0.1.97
 tensorflow-text>=2.13.0
 tensorflow>=2.13.0
