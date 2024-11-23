@@ -67,31 +67,24 @@ from ml_goodput_measurement import monitoring
 
 class MaxTextTrainer:
 
-  def __init__(self, config: Mapping[str, Any]):
-    self._config = config
+  def __init__(self, argv: Sequence[str]):
+    self._argv = argv
 
-  def process_config(self, run_name: str, config: Optional[Mapping[str, Any]] = None):
+  def process_config(self, run_name: str, argv: Optional[Sequence[str]] = None):
     # Some "tricks" to process the correct path...
     if "maxtext" not in sys.path[0]:
       extended_path = os.path.join(sys.path[0], "maxtext", "MaxText")
       sys.path.insert(0, extended_path)
 
-    if not config:
-      config = self._config
-    base_yaml_fpath = os.path.join(os.path.dirname(os.path.abspath(__file__)), "configs", "base.yml")
+    if not argv:
+      argv = self._argv
 
-    # Builds the argv from dict as MaxText currently only supports
-    # an argv route
-    argv = [
-        "MaxText.py",
-        base_yaml_fpath,
-        f"run_name={run_name}",
-    ]
-    argv.extend([f"{k}={v}" for k, v in config.items()])
+    argv.append(f"run_name={run_name}")
     pyconfig.initialize(argv)
     max_utils.print_system_information()
     config = pyconfig.config
     validate_train_config(config)
+
     os.environ["TFDS_DATA_DIR"] = config.dataset_path
     debug_config = debug_configuration.DebugConfig(
         stack_trace_config=stack_trace_configuration.StackTraceConfig(
@@ -103,11 +96,11 @@ class MaxTextTrainer:
     self.diagnostic_config = diagnostic_configuration.DiagnosticConfig(debug_config)
     self.config = config
 
-  def initialize(self, run_name: str, config: Optional[Mapping[str, Any]] = None):
+  def initialize(self, run_name: str, argv: Optional[Sequence[str]] = None):
     """Initializes the MaxText trainer."""
     logging.info("Initializing MaxText")
     jax.config.update("jax_default_prng_impl", "unsafe_rbg")
-    self.process_config(run_name=run_name, config=config)
+    self.process_config(run_name=run_name, argv=argv)
     if jax.__version__ <= "0.4.23":
       cc.initialize_cache(os.path.expanduser(self.config.jax_cache_dir))
     else:

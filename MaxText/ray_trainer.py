@@ -6,6 +6,10 @@ from trainer import MaxTextTrainer
 import logging
 import os
 import argparse
+import pyconfig
+from typing import Sequence, Optional
+from absl import app
+
 
 
 #### Configurations
@@ -42,10 +46,10 @@ def get_job_submission_id() -> str:
   return [job.submission_id for job in jobs if job.job_id == current_job_id][0]
 
 
-def main(args: argparse.Namespace):
+def main(argv: Sequence[str]):
   ray.init(runtime_env=dict(worker_process_setup_hook=setup_loggers))
   run_name = get_job_submission_id()
-  logging.info("Got args: %s", args)
+  logging.info("Got args: %s", argv)
   logging.info("This run name: %s", run_name)
 
   tpu_resources = RayTpuManager.get_available_resources()
@@ -65,32 +69,8 @@ def main(args: argparse.Namespace):
 
   logging.info("Creating Ray actors with multislice.")
 
-  config = MAXTEXT_CONFIG
-  base_dir = args.base_dir
-  # Experiment dir
-  output_dir = os.path.join(base_dir, run_name)
-  compile_cache_dir = os.path.join(base_dir, "compile_cache")
-
-  if args.data_dir is not None:
-    config["dataset_path"] = args.data_dir
-  else:
-    logging.info("Data dir was not set, defaulting to synthetic data.")
-    config["dataset_type"] = "synthetic"
-
-  config["base_output_directory"] = output_dir
-  config["jax_cache_dir"] = compile_cache_dir
-  config["per_device_batch_size"] = args.per_device_batch_size
-  config["max_target_length"] = args.max_target_length
-  config["enable_checkpointing"] = args.enable_checkpointing
-  if args.model_name is not None:
-    config["model_name"] = args.model_name
-
-  env_vars = MACHINE_ENV_VARS
-  if args.verbose_tpu:
-    env_vars |= TPU_VERBOSE_ENV_VARS
-
   actors = RayTpuManager.remote(
-      tpus=tpu_resources[tpu_type], actor_or_fn=MaxTextTrainer, multislice=True, env=MACHINE_ENV_VARS, config=config
+      tpus=tpu_resources[tpu_type], actor_or_fn=MaxTextTrainer, multislice=True, env=MACHINE_ENV_VARS, argv=argv 
   )
 
   try:
@@ -104,8 +84,8 @@ def main(args: argparse.Namespace):
     raise e
 
   logging.info("Initialization complete. Starting MaxText training...")
-  total_steps = int(args.total_steps)
-  steps_per_loop = int(args.steps_per_loop)
+  total_steps = 50 #int(args.total_steps)
+  steps_per_loop = 100 #int(args.steps_per_loop)
   steps = 0
 
   while steps < total_steps:
@@ -127,15 +107,4 @@ def main(args: argparse.Namespace):
 if __name__ == "__main__":
   logger = logging.getLogger()
   logger.setLevel(logging.INFO)
-  parser = argparse.ArgumentParser(prog="MaxText-Ray-Trainer", description="A Ray trainer for MaxText.")
-  parser.add_argument("--base_dir", action="store", required=True, help="Base directory where to store MaxText artifacts.")
-  parser.add_argument("--data_dir", action="store", default=None, help="Where MaxText training data is stored.")
-  parser.add_argument("--steps_per_loop", action="store", default=50, help="The number of steps to run per loop.")
-  parser.add_argument("--total_steps", action="store", default=500, help="The total number of steps to run.")
-  parser.add_argument("--per_device_batch_size", action="store", default=2, help="The total number of steps to run.")
-  parser.add_argument("--enable_checkpointing", action="store_true", default=False, help="Whether or not to checkpointing.")
-  parser.add_argument("--model_name", action="store", default=None, help="The name of the model, if applicable.")
-  parser.add_argument("--max_target_length", action="store", default=8192, help="The total number of steps to run.")
-  parser.add_argument("--verbose_tpu", action="store_true", default=False, help="Whether or not to enable verbose TPU logs.")
-  args = parser.parse_args()
-  main(args)
+  app.run(main)
