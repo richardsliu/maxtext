@@ -102,8 +102,6 @@ def main(argv: Sequence[str]):
   logging.info("Initialization complete. Starting MaxText training...")
   steps, steps_per_loop = get_steps_values(argv)
   logging.info(f"KubeRay training running for total steps: {steps}, steps per loop: {steps_per_loop}")
-  # steps = argv.steps #50 #int(args.steps)
-  # steps_per_loop = argv.steps_per_loop #100 #int(args.steps_per_loop)
   steps_counter = 0
 
   while steps_counter < steps:
