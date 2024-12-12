@@ -1,12 +1,10 @@
 import ray
 from ray_tpu import RayTpuManager
 from ray.job_submission import JobSubmissionClient
-from trainer import MaxTextTrainer
+from train import main as maxtext_main
 
 import logging
 import os
-import argparse
-import pyconfig
 from typing import Sequence, Optional
 from absl import app
 
@@ -67,38 +65,10 @@ def main(argv: Sequence[str]):
 
   logging.info("Running on pod slice type %s.", tpu_type)
 
-  logging.info("Creating Ray actors with multislice.")
+  tasks = RayTpuManager.remote(
+      tpus=tpu_resources[tpu_type], actor_or_fn=maxtext_main, multislice=True, env=MACHINE_ENV_VARS, argv=argv)
 
-  actors = RayTpuManager.remote(
-      tpus=tpu_resources[tpu_type], actor_or_fn=MaxTextTrainer, multislice=True, env=MACHINE_ENV_VARS, argv=argv 
-  )
-
-  try:
-    # Keep initializations separately so we can catch errors.
-    logging.info("Initializing actors.")
-    ray.get([actor.initialize.remote(run_name) for actor in actors])
-  except Exception as e:
-    logging.error("Caught error during initializations: %s", e)
-    logging.error("Shutting down...")
-    ray.shutdown()
-    raise e
-
-  logging.info("Initialization complete. Starting MaxText training...")
-  total_steps = 50 #int(args.total_steps)
-  steps_per_loop = 100 #int(args.steps_per_loop)
-  steps = 0
-
-  while steps < total_steps:
-    logging.info("Training from step %d to %d.", steps, steps_per_loop)
-
-    try:
-      r = ray.get([actor.train.remote(num_steps=steps_per_loop) for actor in actors])
-      steps = r[0]
-    except Exception as e:
-      logging.error("Caught error during training: %s", e)
-      logging.error("Shutting down...")
-      ray.shutdown()
-      raise e
+  ray.get(tasks)
 
   logging.info("Training complete!")
   ray.shutdown()
